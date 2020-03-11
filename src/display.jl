@@ -183,9 +183,9 @@ function Stepper(scene::Scene, path::String; format = :jpg)
     Stepper(scene, path, format, 1)
 end
 
-format2mime(::Type{FileIO.format"PNG"}) = MIME"image/png"()
-format2mime(::Type{FileIO.format"SVG"}) = MIME"image/svg+xml"()
-format2mime(::Type{FileIO.format"JPEG"}) = MIME"image/jpeg"()
+format2mime(::Type{FileIO.format"PNG"})  = MIME("image/png")
+format2mime(::Type{FileIO.format"SVG"})  = MIME("image/svg+xml")
+format2mime(::Type{FileIO.format"JPEG"}) = MIME("image/jpeg")
 
 # Allow format to be overridden with first argument
 """
@@ -194,7 +194,7 @@ format2mime(::Type{FileIO.format"JPEG"}) = MIME"image/jpeg"()
 Saves a `Scene` to file!
 Allowable formats depend on the backend;
 - `GLMakie` allows `.png`, `.jpeg`, and `.bmp`.
-- `CairoMakie` allows `.svg`, `pdf`, and `.jpeg`.
+- `CairoMakie` allows `.png`, `.svg`, `pdf`, and `.jpeg`.
 - `WGLMakie` allows `.png`.
 Resolution can be specified, via `save("path", scene, resolution = (1000, 1000))`!
 """
@@ -376,13 +376,16 @@ function save(path::String, io::VideoStream;
               framerate::Int = 24, bitrate_avg::Int = 2_000_000, bitrate_max::Int = round(Int, 1.3*bitrate_avg), bitrate_min::Int = round(Int, 0.7*bitrate_avg), bufsize::Int = 2*bitrate_avg)
     close(io.process)
     wait(io.process)
+
+    bitrate_flags = `-b:v $bitrate_avg -maxrate $bitrate_max -minrate $bitrate_min -bufsize $bufsize`
+
     p, typ = splitext(path)
     if typ == ".mkv"
         cp(io.path, path, force=true)
     elseif typ == ".mp4"
-        ffmpeg_exe(`-loglevel quiet -i $(io.path) -c:v libx264 -preset slow -r $framerate -pix_fmt yuv420p -c:a libvo_aacenc -b:v $bitrate_avg -maxrate $bitrate_max -minrate $bitrate_min -bufsize $bufsize -y $path`)
+        ffmpeg_exe(`-loglevel quiet -i $(io.path) -c:v libx264 -preset slow -r $framerate -pix_fmt yuv420p -c:a libvo_aacenc $bitrate_flags -y $path`)
     elseif typ == ".webm"
-        ffmpeg_exe(`-loglevel quiet -i $(io.path) -c:v libvpx-vp9 -threads 16 -b:v 2000k -c:a libvorbis -threads 16 -r $framerate -vf scale=iw:ih -y $path`)
+        ffmpeg_exe(`-loglevel quiet -i $(io.path) -c:v libvpx-vp9 -threads 16 $bitrate_flags -c:a libvorbis -threads 16 -r $framerate -vf scale=iw:ih -y $path`)
     elseif typ == ".gif"
         filters = "fps=$framerate,scale=iw:ih:flags=lanczos"
         palette_path = dirname(io.path)
